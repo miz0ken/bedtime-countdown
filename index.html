@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>就寝カウントダウン</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ネオン発光エフェクト（Tailwindでは text-shadow が使えないためカスタムCSSで定義） */
+    .neon {
+      color: #39ff14;
+      text-shadow:
+        0 0 7px #39ff14,
+        0 0 14px #39ff14,
+        0 0 28px #39ff14,
+        0 0 56px #39ff14;
+    }
+
+    /* 時刻を過ぎた場合の警告テキスト発光（オレンジ） */
+    .neon-warn {
+      color: #ff6b35;
+      text-shadow:
+        0 0 7px #ff6b35,
+        0 0 14px #ff6b35,
+        0 0 28px #ff6b35;
+    }
+
+    /* カウントダウン数字：画面サイズに追従する大きなフォント */
+    .countdown-num {
+      font-size: clamp(3.5rem, min(20vw, 28vh), 22rem);
+      line-height: 1;
+    }
+
+    /* 単位ラベル（時間・分・秒）：数字に比例してスケール */
+    .countdown-unit {
+      font-size: clamp(0.875rem, min(3.5vw, 4.2vh), 3rem);
+      padding-bottom: 0.2em;
+    }
+
+    /* 設定パネルのフェードイン/アウトアニメーション */
+    #settings-panel {
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    #settings-panel.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+    }
+    #settings-panel.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body id="app" class="min-h-screen flex flex-col items-center justify-center transition-colors duration-1000">
+
+  <!-- メインコンテンツ（画面全体を3段に分割） -->
+  <main class="min-h-screen w-full flex flex-col text-center">
+
+    <!-- 上エリア：画面上端〜カウントダウンの中間にラベルを置く -->
+    <div class="flex-1 flex items-center justify-center">
+      <p id="label-remaining" class="text-2xl sm:text-4xl tracking-widest opacity-60">
+        就寝まで残り
+      </p>
+    </div>
+
+    <!-- カウントダウン数字（画面中央） -->
+    <div class="flex justify-center px-4">
+      <div id="countdown" class="neon font-mono font-bold leading-none select-none">
+      </div>
+    </div>
+
+    <!-- 下エリア：カウントダウン〜画面下端の中間に目標時刻を置く -->
+    <div class="flex-1 flex items-center justify-center">
+      <p id="target-display" class="text-2xl sm:text-4xl opacity-70">
+        就寝予定: --:--
+      </p>
+    </div>
+
+  </main>
+
+  <!-- 設定ボタン（画面右下に固定） -->
+  <button
+    id="settings-btn"
+    onclick="toggleSettings()"
+    class="fixed bottom-6 right-6 text-2xl w-12 h-12 rounded-full flex items-center justify-center
+           bg-white/10 hover:bg-white/20 backdrop-blur transition-colors duration-200"
+    aria-label="設定を開く"
+  >
+    ⚙
+  </button>
+
+  <!-- 設定パネル（初期は非表示） -->
+  <div
+    id="settings-panel"
+    class="hidden fixed bottom-20 right-6 bg-gray-900/90 backdrop-blur border border-white/20
+           rounded-2xl p-5 shadow-xl flex flex-col gap-4 w-56"
+  >
+    <p class="text-white font-bold text-sm">就寝予定時刻</p>
+
+    <input
+      id="time-input"
+      type="time"
+      class="bg-gray-800 text-white border border-white/30 rounded-lg px-3 py-2
+             text-center text-lg focus:outline-none focus:ring-2 focus:ring-green-400"
+    >
+
+    <button
+      onclick="saveSettings()"
+      class="bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg py-2
+             transition-colors duration-200"
+    >
+      保存
+    </button>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
