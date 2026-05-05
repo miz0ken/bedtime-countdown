@@ -1,6 +1,7 @@
 // ── 定数 ──────────────────────────────────────────────
 const STORAGE_KEY = "bedtime";
 const DEFAULT_BEDTIME = "01:00";
+const GRACE_HOURS = 6; // 就寝時刻を過ぎてから「早く寝ましょう」を表示し続ける時間（時間単位）
 
 // ── 設定の読み書き ────────────────────────────────────
 
@@ -30,12 +31,13 @@ function saveSettings() {
 /**
  * 現在時刻から就寝時刻までの残り秒数を返す。
  *
- * ポイント：就寝時刻が「次に来るタイミング」を計算する。
- *   例）現在 23:30、就寝 01:00 → 翌日 01:00 まで 90分
- *   例）現在 00:30、就寝 01:00 → 今日の 01:00 まで 30分
+ * 3つの状態を区別する：
+ *   A. 就寝時刻より前          → 正の値（カウントダウン）
+ *   B. 就寝時刻〜+GRACE_HOURS  → -1（「早く寝ましょう」表示）
+ *   C. 就寝時刻+GRACE_HOURS 以降 → 正の値（翌日へのカウントダウン）
  *
  * @param {string} bedtime - "HH:MM" 形式の就寝時刻
- * @returns {number} 残り秒数（負の値 = 就寝時刻を過ぎている）
+ * @returns {number} 残り秒数。-1 は警告表示を意味する
  */
 function calcRemaining(bedtime) {
   const now = new Date();
@@ -45,12 +47,22 @@ function calcRemaining(bedtime) {
   const target = new Date(now);
   target.setHours(hours, minutes, 0, 0);
 
-  // 就寝時刻が現在より過去なら「翌日」にずらす
-  if (target <= now) {
-    target.setDate(target.getDate() + 1);
-  }
+  // 猶予期間の終了時刻（就寝時刻 + GRACE_HOURS）
+  // setHours に 24 以上を渡すと自動で翌日扱いになるため日付計算は不要
+  const graceEnd = new Date(target);
+  graceEnd.setHours(graceEnd.getHours() + GRACE_HOURS);
 
-  return Math.floor((target - now) / 1000);
+  if (now < target) {
+    // A: まだ就寝時刻前 → 残り秒数を返す
+    return Math.floor((target - now) / 1000);
+  } else if (now < graceEnd) {
+    // B: 就寝時刻を過ぎたが猶予期間中 → 警告フラグとして -1 を返す
+    return -1;
+  } else {
+    // C: 猶予期間も終了 → 翌日の就寝時刻までカウントダウン再開
+    target.setDate(target.getDate() + 1);
+    return Math.floor((target - now) / 1000);
+  }
 }
 
 /**
@@ -98,8 +110,8 @@ function updateDisplay(bedtime) {
 
   if (remaining <= 0) {
     // 就寝時刻を過ぎている場合
-    countdownEl.className = "neon-warn font-mono font-bold leading-none select-none text-4xl sm:text-5xl";
-    countdownEl.textContent = "早く寝ましょう🌙";
+    countdownEl.className = "neon-warn font-mono font-bold select-none";
+    countdownEl.innerHTML = `<span class="countdown-warn-text">早く寝ましょう🌙</span>`;
     labelEl.textContent = "";
   } else {
     // カウントダウン表示
