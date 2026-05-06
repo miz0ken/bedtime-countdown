@@ -25,6 +25,11 @@
         0 0 28px #ff6b35;
     }
 
+    /* ライトモード時のカウントダウン文字（Rails公式カラー #CC0000、発光なし） */
+    .light-countdown {
+      color: #CC0000;
+    }
+
     /* カウントダウン数字：画面サイズに追従する大きなフォント */
     .countdown-num {
       font-size: clamp(3.5rem, min(20vw, 28vh), 22rem);
@@ -102,10 +107,11 @@
   <div
     id="settings-panel"
     class="hidden fixed bottom-20 right-6 bg-gray-900/90 backdrop-blur border border-white/20
-           rounded-2xl p-5 shadow-xl flex flex-col gap-4 w-56"
+           rounded-2xl p-5 shadow-xl flex flex-col gap-4 w-72"
   >
-    <p class="text-white font-bold text-sm">就寝予定時刻</p>
 
+    <!-- 就寝予定時刻 -->
+    <p class="text-white font-bold text-sm">就寝予定時刻</p>
     <input
       id="time-input"
       type="time"
@@ -113,6 +119,53 @@
              text-center text-lg focus:outline-none focus:ring-2 focus:ring-green-400"
     >
 
+    <!-- テーマ選択 -->
+    <p class="text-white font-bold text-sm">テーマ</p>
+    <div class="flex flex-col gap-2">
+      <label class="flex items-center gap-2 text-white text-sm cursor-pointer">
+        <input type="radio" name="theme-mode" value="auto"
+               onchange="updateThemeInputsState()" class="accent-green-400">
+        自動（時刻で変化）
+      </label>
+      <label class="flex items-center gap-2 text-white text-sm cursor-pointer">
+        <input type="radio" name="theme-mode" value="light"
+               onchange="updateThemeInputsState()" class="accent-green-400">
+        ライトモード
+      </label>
+      <label class="flex items-center gap-2 text-white text-sm cursor-pointer">
+        <input type="radio" name="theme-mode" value="dark"
+               onchange="updateThemeInputsState()" class="accent-green-400">
+        ダークモード
+      </label>
+    </div>
+
+    <!-- 自動切替時刻（autoのときのみ有効） -->
+    <div id="auto-time-wrapper" class="flex flex-col gap-2 transition-opacity duration-200">
+      <p class="text-white font-bold text-sm">自動切替時刻</p>
+      <div class="flex items-center gap-2">
+        <input
+          id="dark-start-input"
+          type="time"
+          class="bg-gray-800 text-white border border-white/30 rounded-lg px-2 py-1.5
+                 text-center text-sm focus:outline-none focus:ring-2 focus:ring-green-400
+                 disabled:cursor-not-allowed w-28"
+        >
+        <span class="text-white/60 text-xs">ライト→ダーク</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <input
+          id="light-start-input"
+          type="time"
+          class="bg-gray-800 text-white border border-white/30 rounded-lg px-2 py-1.5
+                 text-center text-sm focus:outline-none focus:ring-2 focus:ring-green-400
+                 disabled:cursor-not-allowed w-28"
+        >
+        <span class="text-white/60 text-xs">ダーク→ライト</span>
+      </div>
+      <p class="text-white/40 text-xs">※自動選択時のみ有効</p>
+    </div>
+
+    <!-- 保存ボタン -->
     <button
       onclick="saveSettings()"
       class="bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg py-2

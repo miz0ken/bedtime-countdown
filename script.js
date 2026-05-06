@@ -1,28 +1,63 @@
 // ── 定数 ──────────────────────────────────────────────
-const STORAGE_KEY = "bedtime";
-const DEFAULT_BEDTIME = "01:00";
+const STORAGE_KEY            = "bedtime";
+const STORAGE_KEY_THEME      = "themeMode";
+const STORAGE_KEY_DARK_START  = "darkStart";
+const STORAGE_KEY_LIGHT_START = "lightStart";
+
+const DEFAULT_BEDTIME     = "01:00";
+const DEFAULT_THEME_MODE  = "auto";
+const DEFAULT_DARK_START  = "19:00"; // ライト→ダークに切り替わる時刻
+const DEFAULT_LIGHT_START = "06:00"; // ダーク→ライトに切り替わる時刻
+
 const GRACE_HOURS = 6; // 就寝時刻を過ぎてから「早く寝ましょう」を表示し続ける時間（時間単位）
+
+// ── グローバル変数 ────────────────────────────────────
+let bedtime, themeMode, darkStart, lightStart;
 
 // ── 設定の読み書き ────────────────────────────────────
 
 /**
- * localStorageから就寝時刻を読み込む。
- * 未設定の場合はデフォルト値 "01:00" を返す。
+ * localStorage から全設定を読み込み、グローバル変数にセットする。
+ * 未設定の場合はそれぞれのデフォルト値を使う。
  */
 function loadSettings() {
-  return localStorage.getItem(STORAGE_KEY) || DEFAULT_BEDTIME;
+  bedtime    = localStorage.getItem(STORAGE_KEY)             || DEFAULT_BEDTIME;
+  themeMode  = localStorage.getItem(STORAGE_KEY_THEME)       || DEFAULT_THEME_MODE;
+  darkStart  = localStorage.getItem(STORAGE_KEY_DARK_START)  || DEFAULT_DARK_START;
+  lightStart = localStorage.getItem(STORAGE_KEY_LIGHT_START) || DEFAULT_LIGHT_START;
 }
 
 /**
- * timeInputの値をlocalStorageに保存し、設定パネルを閉じる。
- * グローバル変数 bedtime も即座に更新する。
+ * 設定パネルの入力値を localStorage に保存し、設定パネルを閉じる。
+ * グローバル変数も即座に更新する。
  */
 function saveSettings() {
   const input = document.getElementById("time-input");
   if (!input.value) return;
 
+  // 就寝時刻を保存
   bedtime = input.value;
   localStorage.setItem(STORAGE_KEY, bedtime);
+
+  // テーマモードを保存
+  const selectedTheme = document.querySelector('input[name="theme-mode"]:checked');
+  if (selectedTheme) {
+    themeMode = selectedTheme.value;
+    localStorage.setItem(STORAGE_KEY_THEME, themeMode);
+  }
+
+  // 自動切替時刻を保存（入力値がある場合のみ）
+  const darkStartInput  = document.getElementById("dark-start-input");
+  const lightStartInput = document.getElementById("light-start-input");
+  if (darkStartInput.value) {
+    darkStart = darkStartInput.value;
+    localStorage.setItem(STORAGE_KEY_DARK_START, darkStart);
+  }
+  if (lightStartInput.value) {
+    lightStart = lightStartInput.value;
+    localStorage.setItem(STORAGE_KEY_LIGHT_START, lightStart);
+  }
+
   toggleSettings(); // パネルを閉じる
 }
 
@@ -88,19 +123,53 @@ function pad(n) {
   return String(n).padStart(2, "0");
 }
 
+// ── テーマ判定 ────────────────────────────────────────
+
+/**
+ * 現在ダークモードにすべきかどうかを返す。
+ *
+ * - themeMode が "dark"  → 常に true
+ * - themeMode が "light" → 常に false
+ * - themeMode が "auto"  → darkStart/lightStart と現在時刻を分単位で比較して判定
+ *
+ * @returns {boolean} true = ダーク、false = ライト
+ */
+function getCurrentIsDark() {
+  if (themeMode === "dark")  return true;
+  if (themeMode === "light") return false;
+
+  // auto: 現在時刻を分単位に変換して darkStart/lightStart と比較
+  const now    = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  const [darkH,  darkM]  = darkStart.split(":").map(Number);
+  const [lightH, lightM] = lightStart.split(":").map(Number);
+  const darkMin  = darkH  * 60 + darkM;
+  const lightMin = lightH * 60 + lightM;
+
+  // darkMin > lightMin なら日付をまたぐ範囲（例: dark=19:00〜light=06:00）
+  // darkMin < lightMin なら同日内の範囲（例: dark=06:00〜light=19:00）
+  if (darkMin > lightMin) {
+    return nowMin >= darkMin || nowMin < lightMin;
+  } else {
+    return nowMin >= darkMin && nowMin < lightMin;
+  }
+}
+
 // ── 画面の更新 ────────────────────────────────────────
 
 /**
  * カウントダウン数字と就寝予定時刻の表示を更新する。
  * 就寝時刻を過ぎていたら警告メッセージに切り替える。
+ * テーマに応じてネオン緑（ダーク）か Rails 赤（ライト）かを切り替える。
  *
  * @param {string} bedtime - "HH:MM" 形式の就寝時刻
  */
 function updateDisplay(bedtime) {
-  const remaining = calcRemaining(bedtime);
-  const countdownEl = document.getElementById("countdown");
-  const labelEl     = document.getElementById("label-remaining");
-  const targetEl    = document.getElementById("target-display");
+  const remaining    = calcRemaining(bedtime);
+  const countdownEl  = document.getElementById("countdown");
+  const labelEl      = document.getElementById("label-remaining");
+  const targetEl     = document.getElementById("target-display");
 
   // 就寝時刻の表示文字列（例: "01:00" → "AM 1:00"）
   const [h, m] = bedtime.split(":").map(Number);
@@ -108,15 +177,20 @@ function updateDisplay(bedtime) {
   const h12    = h % 12 === 0 ? 12 : h % 12;
   targetEl.textContent = `就寝予定: ${ampm} ${h12}:${pad(m)}`;
 
+  // 現在のテーマを取得
+  const isDark = getCurrentIsDark();
+
   if (remaining <= 0) {
-    // 就寝時刻を過ぎている場合
+    // 就寝時刻を過ぎている場合（警告はテーマに関係なくオレンジ発光のまま）
     countdownEl.className = "neon-warn font-mono font-bold select-none";
     countdownEl.innerHTML = `<span class="countdown-warn-text">早く寝ましょう🌙</span>`;
     labelEl.textContent = "";
   } else {
     // カウントダウン表示
+    // ダーク: 緑ネオン（.neon）  ライト: Rails 赤（.light-countdown）
+    const colorClass = isDark ? "neon" : "light-countdown";
     const { hours, minutes, seconds } = formatTime(remaining);
-    countdownEl.className = "neon font-mono font-bold select-none";
+    countdownEl.className = `${colorClass} font-mono font-bold select-none`;
     countdownEl.innerHTML = `
       <div class="flex items-end gap-[2vw]">
         <span class="countdown-num">${pad(hours)}</span>
@@ -132,29 +206,27 @@ function updateDisplay(bedtime) {
 }
 
 /**
- * 現在時刻が19時以降かどうかでbodyの背景色とテキスト色を切り替える。
- * Tailwind のクラスを付け替えるだけなのでシンプル。
+ * themeMode と darkStart/lightStart にもとづいて
+ * body の背景色とテキスト色を切り替える。
  */
 function applyTheme() {
-  const hour = new Date().getHours();
-  const body = document.getElementById("app");
+  const isDark = getCurrentIsDark();
+  const body   = document.getElementById("app");
 
-  if (hour >= 19 || hour < 6) {
-    // 夜〜深夜: ダークモード
-    body.className = body.className
-      .replace(/bg-\S+/, "")
-      .replace(/text-\S+/, "")
-      .trim();
+  // 既存の bg-* / text-* クラスをいったん除去してから付け直す
+  body.className = body.className
+    .replace(/bg-\S+/g, "")
+    .replace(/text-\S+/g, "")
+    .trim();
+
+  if (isDark) {
+    // ダークモード: 黒背景・白テキスト
     body.classList.add(
       "bg-gray-950", "text-white",
       "min-h-screen", "flex", "flex-col", "items-center", "justify-center", "transition-colors", "duration-1000"
     );
   } else {
-    // 朝〜夕方: ライトモード
-    body.className = body.className
-      .replace(/bg-\S+/, "")
-      .replace(/text-\S+/, "")
-      .trim();
+    // ライトモード: 水色背景・濃いグレーテキスト
     body.classList.add(
       "bg-sky-100", "text-gray-800",
       "min-h-screen", "flex", "flex-col", "items-center", "justify-center", "transition-colors", "duration-1000"
@@ -169,15 +241,23 @@ function applyTheme() {
  * CSS の hidden / visible クラスを付け替えてアニメーションさせる。
  */
 function toggleSettings() {
-  const panel = document.getElementById("settings-panel");
+  const panel    = document.getElementById("settings-panel");
   const isHidden = panel.classList.contains("hidden");
 
   if (isHidden) {
     // 表示するとき: hidden を外して visible を付ける
     panel.classList.remove("hidden");
     panel.classList.add("visible");
-    // input に現在の就寝時刻をセット
-    document.getElementById("time-input").value = bedtime;
+
+    // 各入力欄に現在の設定値をセット
+    document.getElementById("time-input").value        = bedtime;
+    document.getElementById("dark-start-input").value  = darkStart;
+    document.getElementById("light-start-input").value = lightStart;
+    const radio = document.querySelector(`input[name="theme-mode"][value="${themeMode}"]`);
+    if (radio) radio.checked = true;
+
+    // 切替時刻欄の有効/無効を反映
+    updateThemeInputsState();
   } else {
     // 非表示にするとき: visible を外して hidden を付ける
     panel.classList.remove("visible");
@@ -185,10 +265,30 @@ function toggleSettings() {
   }
 }
 
+/**
+ * テーマモードのラジオボタン選択に応じて、
+ * 切替時刻入力欄の有効/無効を切り替える。
+ * 自動モード以外では入力欄を disabled にしてグレーアウトする。
+ */
+function updateThemeInputsState() {
+  const isAuto = document.querySelector('input[name="theme-mode"][value="auto"]').checked;
+  const wrapper = document.getElementById("auto-time-wrapper");
+
+  document.getElementById("dark-start-input").disabled  = !isAuto;
+  document.getElementById("light-start-input").disabled = !isAuto;
+
+  // auto 時は通常表示、それ以外は半透明でグレーアウト
+  if (isAuto) {
+    wrapper.classList.remove("opacity-40");
+  } else {
+    wrapper.classList.add("opacity-40");
+  }
+}
+
 // ── メインループ ──────────────────────────────────────
 
-// アプリ全体で使う就寝時刻（起動時に localStorage から読み込む）
-let bedtime = loadSettings();
+// 起動時に localStorage から全設定を読み込む
+loadSettings();
 
 /**
  * 1秒ごとに呼ばれるメイン処理。
